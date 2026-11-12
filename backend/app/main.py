@@ -11,7 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
-from app.config import get_allowed_origins
+from app.config import get_allowed_origins, check_required_settings
+
+# Must run before app.database is imported, so a missing DATABASE_URL stops
+# the app instead of silently creating an empty SQLite database.
+check_required_settings()
+
 from app.database import engine, Base, SessionLocal
 from app import models
 from app.routers import opportunities, curated_sources, members, newsletters, events, social_posts, system
