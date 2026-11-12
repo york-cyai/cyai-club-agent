@@ -1,0 +1,84 @@
+# Render Blueprint for the CYAI Club Assistant.
+# Deploy: Render Dashboard > New > Blueprint > pick this repo > fill in the
+# prompted values > Apply. No secret values are stored in this file:
+# every "sync: false" variable is typed into Render when the Blueprint is
+# first created (Render only prompts on that first creation; to change one
+# later, edit it on the service's Environment page).
+
+services:
+  # Backend API (FastAPI)
+  - type: web
+    name: cyai-club-agent-api
+    runtime: python
+    rootDir: backend
+    # Free instances sleep when idle and have 512 MB of memory. Sending a
+    # newsletter with a PDF to every member can run out of memory: send in
+    # batches of about 10, or change this to a paid plan such as "starter".
+    plan: free
+    buildCommand: pip install -r requirements.txt && playwright install chromium
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      # Pillow 13 needs Python 3.11+; Render requires a full version here.
+      - key: PYTHON_VERSION
+        value: 3.12.16
+      # Makes the app refuse to start if a required value below is missing.
+      - key: APP_ENV
+        value: production
+      - key: GMAIL_ADDRESS
+        value: cyai.club@gmail.com
+
+      # Required: the app will not start without these three.
+      - key: DATABASE_URL         # Supabase connection string
+        sync: false
+      - key: AGENT_API_KEY        # openssl rand -hex 32; must equal VITE_API_KEY
+        sync: false
+      - key: TOKEN_SECRET_KEY     # openssl rand -hex 32
+        sync: false
+
+      # The website's address, e.g. https://cyai-club-agent-web.onrender.com
+      # (no slash at the end). Comma-separate several.
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # Gmail sending (packet Step 4)
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
+        sync: false
+
+      # AI and search services (packet Step 5)
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: ADZUNA_APP_ID
+        sync: false
+      - key: ADZUNA_API_KEY
+        sync: false
+
+  # Website (React + Vite static site)
+  - type: web
+    name: cyai-club-agent-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist     # relative to rootDir (frontend/dist)
+    routes:
+      # So pages like /events open directly instead of "Not Found".
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Read only at build time: after changing either one, use
+      # Manual Deploy > Clear build cache & deploy on this service.
+      - key: VITE_API_BASE_URL    # backend address with https://, no slash at the end
+        sync: false
+      - key: VITE_API_KEY         # exactly the same value as AGENT_API_KEY
+        sync: false
