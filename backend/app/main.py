@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
+from app.config import get_allowed_origins
 from app.database import engine, Base, SessionLocal
 from app import models
 from app.routers import opportunities, curated_sources, members, newsletters, events, social_posts, system
@@ -33,11 +34,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://cyai-club-assistant.onrender.com",
-        "https://cyai-club-agent-frontend.onrender.com",
-    ],
+    # Defaults live in app/config.py; add new website addresses with the
+    # ALLOWED_ORIGINS env var instead of editing this file.
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
