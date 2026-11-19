@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     supabase_database_url: str = ""
     token_secret_key: str = ""
     agent_api_key: str = ""
+    # Public address of this backend. Used for the unsubscribe link in newsletters.
+    backend_base_url: str = "https://cyai-club-agent.onrender.com"
+    # Pauses while sending a newsletter, to keep the small Render server stable.
+    email_pause_seconds: float = 1.0
+    email_chunk_size: int = 10
+    email_chunk_pause_seconds: float = 5.0
     # Extra website addresses allowed to call the API (CORS), comma-separated,
     # e.g. "https://cyai-club-agent-web.onrender.com,https://example.org".
     # These are added to DEFAULT_ALLOWED_ORIGINS below, not used instead of them.

@@ -49,7 +49,8 @@ def _build_attachment_parts(attachments: list = None) -> list:
 def send_newsletter_email(to_email: str, subject: str, html_content: str, attachments: list = None,
                           attachment_parts: list = None, access_token: str = None) -> bool:
     unsubscribe_token = generate_unsubscribe_token(to_email)
-    unsubscribe_link = f"http://localhost:8000/members/unsubscribe?token={unsubscribe_token}"
+    base_url = settings.backend_base_url.rstrip("/")
+    unsubscribe_link = f"{base_url}/members/unsubscribe?token={unsubscribe_token}"
 
     full_html = (
         f"{html_content}"
@@ -96,13 +97,16 @@ def send_newsletter_email(to_email: str, subject: str, html_content: str, attach
 def send_newsletter_to_members(member_emails: list, subject: str, html_content: str, attachments: list = None) -> dict:
     sent = 0
     failed = 0
+    failed_emails = []
+    total = len(member_emails)
+    chunk_size = max(int(settings.email_chunk_size), 1)
 
     attachment_parts = _build_attachment_parts(attachments)
     gc.collect()
 
     access_token = None
     token_time = 0.0
-    for email in member_emails:
+    for index, email in enumerate(member_emails, start=1):
         # Gmail access tokens last about an hour; refresh every 30 minutes.
         if access_token is None or time.time() - token_time > 1800:
             try:
@@ -118,7 +122,21 @@ def send_newsletter_to_members(member_emails: list, subject: str, html_content: 
         )
         if success:
             sent += 1
+            print(f"[{index}/{total}] sent to {email}")
         else:
             failed += 1
+            failed_emails.append(email)
+            print(f"[{index}/{total}] FAILED for {email}")
+
+        if index < total:
+            if index % chunk_size == 0:
+                time.sleep(settings.email_chunk_pause_seconds)
+            else:
+                time.sleep(settings.email_pause_seconds)
+
+    if failed_emails:
+        print(f"Send finished: {sent} sent, {failed} failed. Failed recipients: {', '.join(failed_emails)}")
+    else:
+        print(f"Send finished: {sent} sent, 0 failed.")
 
     return {"sent": sent, "failed": failed}
