@@ -1,10 +1,12 @@
 import csv
+import html
 import io
 from datetime import datetime
 from typing import List
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -99,20 +101,53 @@ def bulk_import_members(request: Request, emails: List[str], db: Session = Depen
     return {"added": added, "skipped_duplicates": skipped}
 
 
+def _page(title: str, message: str, button_html: str = "") -> HTMLResponse:
+    body = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{html.escape(title)}</title></head>"
+        '<body style="font-family: Arial, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; text-align: center;">'
+        f"<h2>{html.escape(title)}</h2><p>{html.escape(message)}</p>{button_html}"
+        "<p style=\"color: #888; font-size: 12px;\">Cybersecurity &amp; AI Club, York College, CUNY</p>"
+        "</body></html>"
+    )
+    return HTMLResponse(body)
+
+
 @router.get("/unsubscribe")
+def unsubscribe_confirm(token: str):
+    """Shows a confirmation page only. Nothing changes until the button is pressed.
+
+    Email security scanners open every link in an email. If opening this link
+    unsubscribed people, scanners would remove members who never clicked it.
+    """
+    try:
+        email = verify_unsubscribe_token(token)
+    except Exception:
+        return _page("Link not valid", "This unsubscribe link is invalid or has expired.")
+
+    button = (
+        f'<form method="post" action="/members/unsubscribe?token={quote(token, safe="")}">'
+        '<button type="submit" style="padding: 12px 24px; font-size: 16px; cursor: pointer;">Yes, unsubscribe me</button>'
+        "</form>"
+    )
+    return _page("Unsubscribe", f"Do you want to stop receiving CYAI newsletters at {email}?", button)
+
+
+@router.post("/unsubscribe")
 def unsubscribe(token: str, db: Session = Depends(get_db)):
     try:
         email = verify_unsubscribe_token(token)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid or expired unsubscribe link")
+        return _page("Link not valid", "This unsubscribe link is invalid or has expired.")
 
     member = db.query(models.Member).filter(models.Member.email == email).first()
     if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+        return _page("Not found", "We could not find that email on our member list.")
 
     member.is_active = False
     db.commit()
-    return {"detail": f"{email} has been unsubscribed successfully"}
+    return _page("You are unsubscribed", f"{email} will no longer receive CYAI newsletters.")
 
 
 @router.delete("/{member_id}", dependencies=[Depends(verify_api_key)])
